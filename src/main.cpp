@@ -10,6 +10,10 @@
 #include "Sensors.h"
 #include "Motors.h"
 
+// Access motor tick parameters for WiFi tuning
+extern int TICKS_TO_CENTER;
+extern int TICKS_FOR_90_DEG;
+
 // === WiFi Server ===
 WiFiServer server(TELNET_PORT);
 WiFiClient client;
@@ -87,12 +91,12 @@ void setup() {
     Serial.println("║  Configuration                         ║");
     Serial.println("╠════════════════════════════════════════╣");
     Serial.printf("║  PID: Kp=%.1f Ki=%.1f Kd=%.1f          ║\n", Kp, Ki, Kd);
-    Serial.printf("║  Base Speed: %d                        ║\n", baseSpeed);
+    Serial. printf("║  Base Speed: %d                        ║\n", baseSpeed);
     Serial.printf("║  Junction Debounce: %lums              ║\n", junctionDebounce);
-    Serial.println("╚════════════════════════════════════════╝\n");
+    Serial. println("╚════════════════════════════════════════╝\n");
     
     currentState = IDLE;
-    Serial.println("✓ Ready!  Press button or send START command\n");
+    Serial.println("✓ Ready!   Press button or send START command\n");
 }
 
 void loop() {
@@ -108,13 +112,13 @@ void loop() {
         for (int i = 0; i < 8; i++) {
             client.print(sensorVals[i] ? "█" : "·");
         }
-        client. printf("] Err:%.1f Spd:%d Junc:%d | ", 
+        client.printf("] Err:%.1f Spd:%d Junc:%d | ", 
                      sensors.getLineError(), baseSpeed, junctionCount);
         
         switch(currentState) {
             case IDLE: client.print("IDLE"); break;
-            case RUNNING: client. print("RUNNING"); break;
-            case FINISHED: client.print("FINISHED"); break;
+            case RUNNING: client.print("RUNNING"); break;
+            case FINISHED: client. print("FINISHED"); break;
         }
         client.println();
         lastWiFiUpdate = millis();
@@ -145,7 +149,7 @@ void loop() {
             if (digitalRead(USER_BUTTON) == LOW || robotRunning) {
                 delay(50);  // Debounce
                 if (digitalRead(USER_BUTTON) == LOW || robotRunning) {
-                    Serial.println("\n>>> MAZE RUN STARTED!  <<<");
+                    Serial.println("\n>>> MAZE RUN STARTED!   <<<");
                     if (client) client.println("\n>>> MAZE RUN STARTED!");
                     
                     currentState = RUNNING;
@@ -178,13 +182,13 @@ void loop() {
             }
             
             // === Check for FINISH WHITE SQUARE ===
-            if (sensors.isEndPoint()) {
+            if (sensors. isEndPoint()) {
                 if (finishDetectTime == 0) {
                     finishDetectTime = millis();
                     Serial.println("⚠️ Finish square detected.. .");
                 } 
                 else if (millis() - finishDetectTime > FINISH_CONFIRM_MS) {
-                    // CONFIRMED FINISH! 
+                    // CONFIRMED FINISH!  
                     motors.stopBrake();
                     robotRunning = false;
                     
@@ -192,7 +196,7 @@ void loop() {
                     
                     Serial.println("\n╔════════════════════════════════════════╗");
                     Serial.println("║      🏆  MAZE COMPLETE!  🏆            ║");
-                    Serial. println("║   IIT Bombay Mesmerize Complete!       ║");
+                    Serial. println("║   IIT Bombay Mesmerize Complete!        ║");
                     Serial. println("╚════════════════════════════════════════╝");
                     Serial.printf("\n⏱️  Time: %lu seconds\n", runTime);
                     Serial.printf("🔀 Junctions: %d\n\n", junctionCount);
@@ -238,7 +242,7 @@ void loop() {
                         client.printf("J%d: ", junctionCount);
                         if(paths.left) client.print("L");
                         if(paths.straight) client.print("S");
-                        if(paths. right) client.print("R");
+                        if(paths.right) client.print("R");
                         client.println();
                     }
                     
@@ -256,7 +260,7 @@ void loop() {
                         // No turn needed
                     }
                     else if (paths.right) {
-                        motors. turn_90_right();
+                        motors.turn_90_right();
                     }
                     else {
                         motors.turn_180_back();
@@ -287,7 +291,7 @@ void loop() {
 // === PID Line Following ===
 void runPID() {
     // Get current error from sensors
-    float error = sensors. getLineError();
+    float error = sensors.getLineError();
     
     // PID calculations
     float P = Kp * error;
@@ -410,7 +414,7 @@ void processCommand(String cmd) {
     }
     
     // === PID TUNING ===
-    else if (cmd. startsWith("KP ")) {
+    else if (cmd.startsWith("KP ")) {
         Kp = cmd.substring(3).toFloat();
         client.printf("✓ Kp = %.2f\n", Kp);
         Serial.printf("WiFi: Kp = %.2f\n", Kp);
@@ -449,6 +453,31 @@ void processCommand(String cmd) {
         client.printf("✓ Debounce = %lums\n", junctionDebounce);
     }
     
+    // === MOTOR TICK TUNING ===
+    else if (cmd.startsWith("CENTER ")) {
+        int ticks = cmd.substring(7).toInt();
+        Motors::updateCenterTicks(ticks);
+        client.printf("✓ Center Ticks = %d\n", ticks);
+        Serial.printf("WiFi: Center Ticks = %d\n", ticks);
+    }
+    else if (cmd.startsWith("TURN90 ")) {
+        int ticks = cmd.substring(7).toInt();
+        Motors::updateTurnTicks(ticks);
+        client.printf("✓ Turn 90° Ticks = %d\n", ticks);
+        Serial.printf("WiFi: Turn 90° Ticks = %d\n", ticks);
+    }
+    else if (cmd.startsWith("MOTORS ")) {
+        int s1 = cmd.indexOf(' ', 7);
+        if (s1 > 0) {
+            int centerTicks = cmd.substring(7, s1).toInt();
+            int turn90Ticks = cmd.substring(s1 + 1). toInt();
+            Motors::updateCenterTicks(centerTicks);
+            Motors::updateTurnTicks(turn90Ticks);
+            client.printf("✓ Motors: Center=%d Turn90=%d\n", centerTicks, turn90Ticks);
+            Serial.printf("WiFi: Motors: Center=%d Turn90=%d\n", centerTicks, turn90Ticks);
+        }
+    }
+    
     // === TESTING ===
     else if (cmd == "TEST" || cmd == "T") {
         bool sensors_arr[8];
@@ -459,13 +488,13 @@ void processCommand(String cmd) {
         for (int i = 0; i < 8; i++) {
             client.print(sensors_arr[i] ?  "█" : "·");
         }
-        client.println("]");
-        client.printf("Error: %.2f\n", sensors.getLineError());
-        client.printf("Position: %. 2f\n", sensors.getPosition());
-        client.printf("Active: %d sensors\n", sensors.getActiveSensorCount());
+        client. println("]");
+        client.printf("Error: %. 2f\n", sensors.getLineError());
+        client.printf("Position: %.2f\n", sensors.getPosition());
+        client. printf("Active: %d sensors\n", sensors.getActiveSensorCount());
         client.printf("On Line: %s\n", sensors.onLine() ? "YES" : "NO");
         client.printf("Finish: %s\n", sensors. isEndPoint() ? "YES" : "NO");
-        client.println("==================\n");
+        client. println("==================\n");
     }
     else if (cmd == "PID") {
         client.println("\n=== PID Values ===");
@@ -474,10 +503,10 @@ void processCommand(String cmd) {
         client.printf("Kd = %.2f\n", Kd);
         client.printf("Last Error = %.2f\n", lastError);
         client.printf("Integral = %.2f\n", integral);
-        client. println("==================\n");
+        client.println("==================\n");
     }
     else {
-        client.println("❌ Unknown.  Type HELP");
+        client.println("❌ Unknown.   Type HELP");
     }
 }
 
@@ -489,10 +518,15 @@ void printMenu() {
     client.println("PID - Show PID values");
     client.println("");
     client.println("=== Tuning ===");
-    client.println("KP <val> / KI <val> / KD <val>");
+    client. println("KP <val> / KI <val> / KD <val>");
     client.println("TUNE <kp> <ki> <kd>");
     client.println("SPEED <val>");
     client.println("DEBOUNCE <ms>");
+    client.println("");
+    client.println("=== Motor Ticks ===");
+    client. println("CENTER <ticks> - Set ticks to center (10-500)");
+    client. println("TURN90 <ticks> - Set 90° turn ticks (50-2000)");
+    client.println("MOTORS <center> <turn90> - Set both");
     client.println("================\n");
 }
 
@@ -507,6 +541,7 @@ void printStatus() {
     client.printf("PID: Kp=%.1f Ki=%.2f Kd=%.1f\n", Kp, Ki, Kd);
     client.printf("Speed: %d\n", baseSpeed);
     client.printf("Debounce: %lums\n", junctionDebounce);
+    client.printf("Motor Ticks: Center=%d Turn90=%d\n", TICKS_TO_CENTER, TICKS_FOR_90_DEG);
     client.printf("Error: %.2f\n", sensors.getLineError());
     client.printf("Junctions: %d\n", junctionCount);
     client.printf("On Line: %s\n", sensors.onLine() ? "YES" : "NO");
